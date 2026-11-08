@@ -169,7 +169,17 @@
   .delta.up { color: var(--green); }
   .delta.down { color: var(--red); }
   .delta.flat { color: var(--muted); }
-  .radar-wrap { display: grid; grid-template-columns: 180px 1fr; gap: 8px; align-items: center; }
+  .radar-wrap { display: grid; grid-template-columns: minmax(180px, 280px) minmax(0, 1fr); gap: 8px; align-items: center; }
+  .radar-wrap svg { width: 100%; height: auto; display: block; }
+  .hover-note { color: #888; font-size: 12px; line-height: 1.6; }
+  .orgline { color: #8a5a22; font-size: 13px; font-weight: 650; margin: 0 0 6px; }
+  .dim-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+  .dim-mini { background: #fff; border: 1px solid #f6e7db; border-radius: 10px; padding: 6px 4px; text-align: center; }
+  .dim-mini b { display: block; font-size: 12px; font-weight: 650; }
+  .dim-mini span { color: #fa8c16; font-weight: 800; font-size: 15px; }
+  .dim-mini small { color: #bbb; font-weight: 500; font-size: 11px; }
+  .log span:first-child { flex: 1; min-width: 0; }
+  .rankline, .shop-btn .v, .shop-btn .addr, .hover-note { overflow-wrap: anywhere; }
   .logs { margin-top: 8px; }
   .logs summary { cursor: pointer; color: #888; font-size: 12px; }
   .log { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px dashed #f3e6dc; font-size: 12px; }
@@ -243,11 +253,32 @@
   .grp.lv3 { margin-left: 16px; width: calc(100% - 16px); background: transparent; color: #888; }
   .grp b { font-weight: 750; }
   @media (max-width: 1100px) {
-    .app { grid-template-columns: 1fr; }
-    .side { position: relative; height: auto; max-height: none; }
-    .list { max-height: 280px; }
+    html, body { height: auto; }
+    .app { display: flex; flex-direction: column; width: 100%; min-height: 100vh; }
+    .main { order: 1; width: 100%; min-width: 0; padding: 12px 12px 20px; }
+    .side { order: 2; position: static; height: auto; width: 100%; border-right: 0; border-top: 1px solid #eee; }
+    .list { max-height: none; }
     .hero, .dims, .tasks, .stars, .radar-wrap { grid-template-columns: 1fr; }
     .eq { display: none; }
+    .topbar { flex-direction: column; align-items: stretch; }
+    .shop-field, .shop-btn { max-width: none; width: 100%; }
+    .modes { width: 100%; }
+    .mode-btn { flex: 1; text-align: center; }
+    .radar-wrap { justify-items: center; }
+    .radar-wrap svg { max-width: 320px; }
+    .radar-wrap > div, .hover-note { width: 100%; }
+    .explains { align-items: flex-start; }
+    .score-label { flex-wrap: wrap; gap: 4px; }
+    .track { overflow-x: auto; margin-left: 0; margin-right: 0; padding-bottom: 4px; }
+    .node { flex: 0 0 auto; min-width: 58px; }
+    .picker { position: static; width: 100%; grid-template-columns: 1fr; }
+    .picker.open { display: block; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .stat { min-width: 0; }
+    .table-wrap { max-height: none; }
+    .big { font-size: 48px; }
+    .hero { padding: 14px 12px; }
+    .hero > div { min-width: 0; }
   }
 </style>
 </head>
@@ -506,7 +537,7 @@ function renderSide() {
 
 function radarSvg(dims) {
   const n = dims.length || 1;
-  const cx = 120, cy = 108, r = 52;
+  const cx = 130, cy = 124, r = 64;
   const shortName = { "基础信息": "基础", "商品丰富度": "商品", "流量/交易表现": "流量", "服务质量": "服务", "限时附加分": "附加" };
   const pt = (i, ratio) => {
     const ang = -Math.PI / 2 + i * 2 * Math.PI / n;
@@ -515,10 +546,10 @@ function radarSvg(dims) {
   const ring = ratio => dims.map((_, i) => pt(i, ratio).map(x => x.toFixed(1)).join(",")).join(" ");
   const poly = dims.map((d, i) => pt(i, d.full ? Math.max(0, Math.min(1, d.score / d.full)) : 0).map(x => x.toFixed(1)).join(",")).join(" ");
   const labels = dims.map((d, i) => {
-    const [x, y] = pt(i, 1.55);
+    const [x, y] = pt(i, 1.38);
     return '<text x="' + x.toFixed(1) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="middle" font-size="12" fill="#666">' + esc(shortName[d.name] || d.name) + '</text>';
   }).join("");
-  return '<svg viewBox="0 0 240 216" width="240" height="216">' +
+  return '<svg viewBox="0 0 260 258" width="100%" height="auto">' +
     '<polygon points="' + ring(1) + '" fill="none" stroke="#f3e2d4" />' +
     '<polygon points="' + ring(.66) + '" fill="none" stroke="#f6ece4" />' +
     '<polygon points="' + ring(.33) + '" fill="none" stroke="#f6ece4" />' +
@@ -598,11 +629,16 @@ function renderDetail(s) {
       '<div class="eq">=</div>' +
       '<div class="score-side">' +
         '<div class="explains">' + explains + '</div>' +
+        '<div class="orgline">' + esc(orgLine(s)) + '</div>' +
         '<div class="score-label"><span>当前经营评分</span><span>较昨日 <b class="delta ' + dlt.cls + '">' + dlt.text + '</b></span></div>' +
         '<div class="big">' + fmt(s.score) + '<span>分</span></div>' +
         '<div style="color:#999;font-size:12px;margin:4px 0 8px">' + esc(s.updateTime || "") + '</div>' +
         '<div class="radar-wrap">' + radarSvg(dims.filter(d => d.name !== "限时附加分")) +
-          '<div style="color:#888;font-size:12px;line-height:1.6">' + esc(s.scoreHover || "分数按前一日任务完成情况计算，完成后次日上午更新。") + '</div></div>' +
+          '<div class="hover-note">' + esc(s.scoreHover || "分数按前一日任务完成情况计算，完成后次日上午更新。") + '</div></div>' +
+        '<div class="dim-row">' + dims.filter(d => ({"基础信息":"基础","商品丰富度":"商品","流量/交易表现":"流量","服务质量":"服务"})[d.name]).map(d => {
+          const label = {"基础信息":"基础","商品丰富度":"商品","流量/交易表现":"流量","服务质量":"服务"}[d.name];
+          return '<div class="dim-mini"><b>' + label + '</b><span>' + fmt(d.score) + '<small>/' + fmt(d.full) + '</small></span></div>';
+        }).join("") + '</div>' +
         (logs ? '<div class="logs"><details open><summary>近期得分变动明细</summary>' + logs + '</details></div>' : '') +
       '</div>' +
     '</section>';
