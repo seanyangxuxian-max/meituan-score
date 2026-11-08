@@ -174,7 +174,14 @@
   .hover-note { color: #888; font-size: 12px; line-height: 1.6; }
   .orgline { color: #8a5a22; font-size: 13px; font-weight: 650; margin: 0 0 6px; }
   .dim-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
-  .dim-mini { background: #fff; border: 1px solid #f6e7db; border-radius: 10px; padding: 6px 4px; text-align: center; }
+  button.dim-mini, .dim-mini { appearance: none; width: 100%; background: #fff; border: 1px solid #f6e7db; border-radius: 10px; padding: 6px 4px; text-align: center; color: inherit; font: inherit; cursor: pointer; }
+  .dim-mini.on, .dim-mini:hover { border-color: #f0d060; background: #fff8e1; }
+  button.log { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+  button.log:hover { background: #fffaf0; }
+  button.task-top { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; text-align: left; padding: 0; }
+  .task.hit { border-color: #f0d060; box-shadow: inset 0 0 0 1px #f0d060; }
+  .dim-panel { margin-top: 8px; }
+  .dim-panel-title { grid-column: 1 / -1; color: #8a5a22; font-size: 12px; font-weight: 650; }
   .dim-mini b { display: block; font-size: 12px; font-weight: 650; }
   .dim-mini span { color: #fa8c16; font-weight: 800; font-size: 15px; }
   .dim-mini small { color: #bbb; font-weight: 500; font-size: 11px; }
@@ -327,7 +334,10 @@ const state = {
   scrollList: false,
   director: "全部",
   manager: "全部",
-  supervisor: "全部"
+  supervisor: "全部",
+  dimOpen: false,
+  dimKey: "",
+  taskFocus: ""
 };
 
 function gradeOf(s) {
@@ -443,6 +453,9 @@ function selectShop(id) {
   const dims = dimsOf(s);
   const di = dims.findIndex(d => (d.tasks || []).some(t => Number(t.score) < Number(t.full)));
   state.dimCursor = di >= 0 ? di : 0;
+  state.dimOpen = false;
+  state.dimKey = "";
+  state.taskFocus = "";
   state.mode = "shop";
   render();
 }
@@ -574,10 +587,10 @@ function taskCard(t, done) {
   const actions = (t.actions || []).map(a =>
     '<button class="' + (a === "去完成" ? "solid" : "ghost") + '" data-act="toggle-task">' + esc(a) + '</button>'
   ).join("");
-  return '<article class="task' + (done ? " done" : " open") + '">' +
-    '<div class="task-top"><div><h3>' + esc(t.name) + '</h3>' +
-    '<div class="tscore"><b>' + fmt(t.score) + '分</b><span> /共' + fmt(t.full) + '分</span></div></div>' +
-    '<div class="actions">' + (actions || (done ? '<span class="ghost">已满分</span>' : '')) + '</div></div>' +
+  const focused = state.taskFocus === t.name;
+  return '<article class="task' + (done ? " done" : "") + (focused ? " open hit" : "") + '">' +
+    '<button type="button" class="task-top" data-act="toggle-task"><div><h3>' + esc(t.name) + '</h3>' +
+    '<div class="tscore"><b>' + fmt(t.score) + '分</b><span> /共' + fmt(t.full) + '分</span></div></div></button>' +
     (t.current ? '<div class="current">' + esc(t.current) + '</div>' : '') +
     (t.desc ? '<div class="desc">' + esc(t.desc) + '</div>' : '') +
     (rules ? '<div class="rules">' + rules + '</div>' : '') +
@@ -604,7 +617,7 @@ function renderDetail(s) {
   }).join("");
   const logs = (s.logs || []).map(l => {
     const d = deltaInfo(l.delta);
-    return '<div class="log"><span>' + esc(l.name) + '<br><span style="color:#bbb">' + esc(l.desc || "") + '</span></span><span><b class="delta ' + d.cls + '">' + d.text + '分</b><br><span style="color:#bbb">' + esc(l.date) + '</span></span></div>';
+    return '<button type="button" class="log" data-act="log" data-name="' + esc(l.name) + '"><span>' + esc(l.name) + '<br><span style="color:#bbb">' + esc(l.desc || "") + '</span></span><span><b class="delta ' + d.cls + '">' + d.text + '分</b><br><span style="color:#bbb">' + esc(l.date) + '</span></span></button>';
   }).join("");
   const rules = nodes.map(n => '<div><b>' + esc(n.name) + '</b> · ' + esc(n.hover || n.display || "") + '</div>').join("");
   if (s.score == null && !dims.length) {
@@ -635,15 +648,36 @@ function renderDetail(s) {
         '<div style="color:#999;font-size:12px;margin:4px 0 8px">' + esc(s.updateTime || "") + '</div>' +
         '<div class="radar-wrap">' + radarSvg(dims.filter(d => d.name !== "限时附加分")) +
           '<div class="hover-note">' + esc(s.scoreHover || "分数按前一日任务完成情况计算，完成后次日上午更新。") + '</div></div>' +
-        '<div class="dim-row">' + dims.filter(d => ({"基础信息":"基础","商品丰富度":"商品","流量/交易表现":"流量","服务质量":"服务"})[d.name]).map(d => {
+        '<div class="dim-row">' + dims.filter(d => ({"基础信息":1,"商品丰富度":1,"流量/交易表现":1,"服务质量":1})[d.name]).map(d => {
           const label = {"基础信息":"基础","商品丰富度":"商品","流量/交易表现":"流量","服务质量":"服务"}[d.name];
-          return '<div class="dim-mini"><b>' + label + '</b><span>' + fmt(d.score) + '<small>/' + fmt(d.full) + '</small></span></div>';
-        }).join("") + '</div>' +
+          const on = state.dimOpen && state.dimKey === d.name;
+          return '<button type="button" class="dim-mini' + (on ? " on" : "") + '" data-act="dim" data-name="' + esc(d.name) + '"><b>' + label + '</b><span>' + fmt(d.score) + '<small>/' + fmt(d.full) + '</small></span></button>';
+        }).join("") + '</div>' + dimPanel(dims) +
         (logs ? '<div class="logs"><details open><summary>近期得分变动明细</summary>' + logs + '</details></div>' : '') +
       '</div>' +
     '</section>';
 }
 
+
+function dimPanel(dims) {
+  if (!state.dimOpen) return "";
+  const dim = (dims || []).find(d => d.name === state.dimKey);
+  if (!dim) return "";
+  const tasks = dim.tasks || [];
+  const openTasks = tasks.filter(t => Number(t.score) < Number(t.full));
+  const doneTasks = tasks.filter(t => Number(t.score) >= Number(t.full));
+  return '<div class="tasks dim-panel" id="dim-panel">' +
+    '<div class="dim-panel-title">' + esc(({"基础信息":"基础","商品丰富度":"商品","流量/交易表现":"流量","服务质量":"服务"})[dim.name] || dim.name) + ' · ' + tasks.length + ' 项任务，点开看规则</div>' +
+    openTasks.map(t => taskCard(t, false)).join("") +
+    (doneTasks.length ? '<button type="button" class="done-head" data-act="done">已满分 ' + doneTasks.length + ' 项 · ' + (state.doneOpen ? "收起" : "展开") + '</button>' + (state.doneOpen ? doneTasks.map(t => taskCard(t, true)).join("") : "") : "") +
+    '</div>';
+}
+function findTask(s, name) {
+  const dims = dimsOf(s);
+  for (const d of dims) for (const t of d.tasks || []) if (t.name === name) return { dim: d, task: t };
+  for (const d of dims) for (const t of d.tasks || []) if (t.name && (t.name.includes(name) || name.includes(t.name))) return { dim: d, task: t };
+  return null;
+}
 function mini(s, name) {
   const d = dimBy(s, name);
   if (!d) return "—";
@@ -721,7 +755,23 @@ document.body.addEventListener("click", e => {
   else if (act === "grade-prev") { state.gradeCursor = Math.max(0, state.gradeCursor - 1); renderMain(); }
   else if (act === "grade-next") { state.gradeCursor = state.gradeCursor + 1; renderMain(); }
   else if (act === "grade-at") { state.gradeCursor = Number(t.dataset.i); renderMain(); }
-  else if (act === "dim") { state.dimCursor = Number(t.dataset.i); state.doneOpen = true; renderMain(); }
+  else if (act === "dim") {
+    const name = t.dataset.name;
+    if (state.dimOpen && state.dimKey === name) state.dimOpen = false;
+    else { state.dimOpen = true; state.dimKey = name; state.taskFocus = ""; state.doneOpen = false; }
+    renderMain();
+    if (state.dimOpen) requestAnimationFrame(() => { const p = document.getElementById("dim-panel"); if (p) p.scrollIntoView({ block: "nearest" }); });
+  }
+  else if (act === "log") {
+    const hit = findTask(shop(), t.dataset.name);
+    if (!hit) return;
+    state.dimOpen = true;
+    state.dimKey = hit.dim.name;
+    state.taskFocus = hit.task.name;
+    state.doneOpen = Number(hit.task.score) >= Number(hit.task.full);
+    renderMain();
+    requestAnimationFrame(() => { const el = document.querySelector(".task.hit"); if (el) el.scrollIntoView({ block: "center" }); });
+  }
   else if (act === "done") { state.doneOpen = !state.doneOpen; renderMain(); }
   else if (act === "rules") { state.rulesOpen = !state.rulesOpen; renderMain(); }
   else if (act === "toggle-task") { const card = t.closest(".task"); if (card) card.classList.toggle("open"); }
