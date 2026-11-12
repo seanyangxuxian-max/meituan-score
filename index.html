@@ -676,7 +676,16 @@ function findTask(s, name) {
   const dims = dimsOf(s);
   for (const d of dims) for (const t of d.tasks || []) if (t.name === name) return { dim: d, task: t };
   for (const d of dims) for (const t of d.tasks || []) if (t.name && (t.name.includes(name) || name.includes(t.name))) return { dim: d, task: t };
-  return null;
+  let best = null, bestLen = 3;
+  for (const d of dims) for (const t of d.tasks || []) {
+    const n = t.name || "";
+    for (let len = Math.min(name.length, n.length); len > bestLen; len--) {
+      for (let i = 0; i + len <= name.length; i++) {
+        if (n.includes(name.slice(i, i + len))) { best = { dim: d, task: t }; bestLen = len; break; }
+      }
+    }
+  }
+  return best;
 }
 function mini(s, name) {
   const d = dimBy(s, name);
